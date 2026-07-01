@@ -2,7 +2,7 @@
 
 StayLux adalah aplikasi mobile booking hotel profesional dan modern yang dibangun menggunakan **React Native (Expo)** untuk Frontend, serta **Node.js (Express)** dan **MySQL** untuk Backend. Aplikasi ini mendukung siklus pemesanan hotel lengkap mulai dari pencarian, pemilihan kamar, hingga pembayaran menggunakan *payment gateway* sesungguhnya.
 
-## 🚀 Fitur Utama
+## Fitur Utama
 
 - **Authentication System:** Register, Login, Forgot Password, dan manajemen profil pengguna.
 - **Advanced Search & Filter:** Pencarian hotel dengan filter canggih berdasarkan lokasi, harga, kategori, dan rating.
@@ -12,13 +12,13 @@ StayLux adalah aplikasi mobile booking hotel profesional dan modern yang dibangu
 - **Real-time Chat:** Fitur obrolan interaktif bawaan aplikasi.
 - **User Dashboard:** Riwayat pesanan (*My Bookings*), manajemen profil, dan hotel favorit.
 
-## 💻 Tech Stack
+## Tech Stack
 
 - **Frontend:** React Native, Expo Router, TypeScript, Axios
 - **Backend:** Node.js, Express.js, MySQL
 - **Payment Gateway:** Midtrans (Snap API)
 
-## 🛠️ Persiapan & Instalasi
+## Persiapan & Instalasi
 
 ### 1. Database MySQL
 Pastikan Anda memiliki server MySQL lokal yang berjalan (misal: XAMPP).
@@ -52,13 +52,13 @@ npx expo start
 ```
 > **Catatan:** Pastikan HP (jika menggunakan Expo Go) dan PC Anda berada di dalam **satu jaringan WiFi yang sama**. Aplikasi sudah dikonfigurasi untuk mendeteksi IP lokal komputer Anda secara otomatis untuk koneksi API.
 
-## 🔑 Demo Login
+## Demo Login
 
 Untuk mencoba aplikasi tanpa mendaftar, gunakan akun berikut:
 - **Email:** `sarah@gmail.com`
 - **Password:** `password123`
 
-## 📁 Struktur Direktori
+## Struktur Direktori
 ```text
 Booking_Hotel/
 ├── app/                 # Layar Frontend (Expo Router: index, checkout, bookings, chat, dll)
@@ -76,5 +76,5 @@ Booking_Hotel/
 └── README.md            # Dokumentasi ini
 ```
 
-## 📄 Lisensi
+## Lisensi
 Proyek ini dibuat untuk keperluan edukasi dan tugas kuliah.
