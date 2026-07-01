@@ -501,8 +501,19 @@ app.get("/api/hotels", (req, res) => {
   const conditions = [];
 
   if (location) {
-    conditions.push("(h.location LIKE ? OR h.name LIKE ?)");
-    params.push(`%${location}%`, `%${location}%`);
+    const locTerms = location.split(/[\\s,]+/).map(s => s.trim()).filter(s => s.length > 2);
+    if (locTerms.length > 0) {
+      const orConditions = [];
+      locTerms.forEach(term => {
+        orConditions.push("h.location LIKE ?");
+        orConditions.push("h.name LIKE ?");
+        params.push(`%${term}%`, `%${term}%`);
+      });
+      conditions.push("(" + orConditions.join(" OR ") + ")");
+    } else {
+      conditions.push("(h.location LIKE ? OR h.name LIKE ?)");
+      params.push(`%${location}%`, `%${location}%`);
+    }
   }
   if (name) {
     conditions.push("h.name LIKE ?");
@@ -1098,13 +1109,22 @@ io.on('connection', (socket) => {
     // data format: { userId, text, timestamp }
     console.log('Message received:', data);
     
-    // Broadcast back to the user (simulate echo/bot response for now)
-    // Real implementation would save to DB and wait for admin response
     setTimeout(() => {
+      let replyText = `Terima kasih! Pesan Anda telah diterima oleh Customer Service kami. Kami akan segera membalasnya.`;
+      const userText = data.text.toLowerCase();
+
+      if (userText.includes('membatalkan pesanan') || userText.includes('refund')) {
+        replyText = "Halo! Untuk membatalkan pesanan Anda, silakan buka tab 'Bookings', pilih pesanan yang ingin dibatalkan, lalu tekan tombol 'Cancel Booking'. Jika pesanan Anda bersifat 'Refundable', dana Anda akan otomatis diproses untuk pengembalian.";
+      } else if (userText.includes('berapa lama proses refund')) {
+        replyText = "Proses pengembalian dana (refund) biasanya memakan waktu sekitar 3 hingga 5 hari kerja, tergantung pada metode pembayaran dan kebijakan bank Anda masing-masing.";
+      } else if (userText.includes('reschedule')) {
+        replyText = "Mohon maaf, untuk saat ini fitur reschedule otomatis belum tersedia di aplikasi kami. Sebagai alternatif, Anda dapat membatalkan pesanan lama Anda (jika mendukung refund) dan membuat pesanan baru dengan tanggal yang sesuai.";
+      }
+
       socket.emit('receive_message', {
         id: Date.now().toString(),
         userId: 'admin',
-        text: `Terima kasih! Pesan Anda ("${data.text}") telah diterima oleh Customer Service kami. Kami akan segera membalasnya.`,
+        text: replyText,
         timestamp: new Date().toISOString(),
         isAdmin: true
       });

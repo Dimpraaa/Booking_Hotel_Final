@@ -10,6 +10,13 @@ import { globalStore } from '../src/store';
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+export const formatToLocalISOString = (date: Date) => {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export const formatPaymentMethod = (typeStr: string) => {
   if (!typeStr || typeStr === 'midtrans' || typeStr === 'Midtrans') return 'Paid via Midtrans';
   
@@ -212,8 +219,8 @@ export default function CheckoutScreen() {
         user_id: globalStore.userId,
         hotel_id: Number(String(hotelId)),
         room_id: Number(String(roomId)),
-        check_in: checkInDate.toISOString().split('T')[0],
-        check_out: checkOutDate.toISOString().split('T')[0],
+        check_in: formatToLocalISOString(checkInDate),
+        check_out: formatToLocalISOString(checkOutDate),
         total_price: total,
         room_count: roomCount,
         guest_name: name.trim(),
@@ -245,8 +252,8 @@ export default function CheckoutScreen() {
                 bookingId: String(bookingRes.booking_id),
                 hotelName: String(hotelName || ''),
                 guestName: name.trim(),
-                checkIn: checkInDate.toISOString().split('T')[0],
-                checkOut: checkOutDate.toISOString().split('T')[0],
+                checkIn: formatToLocalISOString(checkInDate),
+                checkOut: formatToLocalISOString(checkOutDate),
                 totalPrice: String(total),
                 paymentMethod: 'Midtrans Simulation',
               },
@@ -464,8 +471,8 @@ export default function CheckoutScreen() {
                                     bookingId: String(currentBookingRes.booking_id),
                                     hotelName: String(hotelName || ''),
                                     guestName: name.trim(),
-                                    checkIn: checkInDate.toISOString().split('T')[0],
-                                    checkOut: checkOutDate.toISOString().split('T')[0],
+                                    checkIn: formatToLocalISOString(checkInDate),
+                                    checkOut: formatToLocalISOString(checkOutDate),
                                     totalPrice: String(total),
                                     paymentMethod: formatPaymentMethod(res.paymentMethod || 'Midtrans'),
                                   },
@@ -478,8 +485,8 @@ export default function CheckoutScreen() {
                                     bookingId: String(currentBookingRes.booking_id),
                                     hotelName: String(hotelName || ''),
                                     guestName: name.trim(),
-                                    checkIn: checkInDate.toISOString().split('T')[0],
-                                    checkOut: checkOutDate.toISOString().split('T')[0],
+                                    checkIn: formatToLocalISOString(checkInDate),
+                                    checkOut: formatToLocalISOString(checkOutDate),
                                     totalPrice: String(total),
                                     paymentMethod: 'Paid via Midtrans',
                                   },

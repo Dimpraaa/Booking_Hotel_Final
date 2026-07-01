@@ -166,6 +166,18 @@ export default function SearchEngineScreen() {
     });
   };
 
+  const handleDestinationPress = (dest: string) => {
+    router.push({
+      pathname: '/search',
+      params: { 
+        location: dest, 
+        checkIn: checkInDate.toISOString().split('T')[0], 
+        checkOut: checkOutDate.toISOString().split('T')[0], 
+        guests: guests.toString() 
+      }
+    });
+  };
+
   const handleCheckInSelect = (date: Date) => {
     setCheckInDate(date);
     // Auto-adjust checkout if it's before or equal to new checkin
@@ -332,34 +344,34 @@ export default function SearchEngineScreen() {
         </View>
 
         <View style={styles.grid}>
-          <View style={styles.gridCard}>
+          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Bali')}>
             <Image source={{ uri: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=500&q=60' }} style={styles.gridImg} />
             <View style={styles.gridOverlay}>
               <Text style={styles.gridTitle}>Bali</Text>
               <Text style={styles.gridSub}>Indonesia</Text>
             </View>
-          </View>
-          <View style={styles.gridCard}>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Tokyo')}>
             <Image source={{ uri: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=500&q=60' }} style={styles.gridImg} />
             <View style={styles.gridOverlay}>
               <Text style={styles.gridTitle}>Tokyo</Text>
               <Text style={styles.gridSub}>Japan</Text>
             </View>
-          </View>
-          <View style={styles.gridCard}>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Paris')}>
             <Image source={{ uri: 'https://images.unsplash.com/photo-1502602898657-3e90760020c6?w=500&q=60' }} style={styles.gridImg} />
             <View style={styles.gridOverlay}>
               <Text style={styles.gridTitle}>Paris</Text>
               <Text style={styles.gridSub}>France</Text>
             </View>
-          </View>
-          <View style={styles.gridCard}>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Dubai')}>
             <Image source={{ uri: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=500&q=60' }} style={styles.gridImg} />
             <View style={styles.gridOverlay}>
               <Text style={styles.gridTitle}>Dubai</Text>
               <Text style={styles.gridSub}>UAE</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <View style={{height: 100}} />

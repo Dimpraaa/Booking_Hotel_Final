@@ -27,6 +27,12 @@ export default function ChatScreen() {
     };
   }, []);
 
+  const quickReplies = [
+    "Saya ingin membatalkan pesanan (Refund)",
+    "Berapa lama proses refund?",
+    "Bagaimana cara reschedule pesanan?"
+  ];
+
   const handleSend = () => {
     if (!inputText.trim()) return;
 
@@ -90,6 +96,14 @@ export default function ChatScreen() {
         </ScrollView>
 
         <View style={styles.inputArea}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReplyContainer} contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: 10 }}>
+            {quickReplies.map((reply, idx) => (
+              <TouchableOpacity key={idx} style={styles.quickReplyBtn} onPress={() => setInputText(reply)}>
+                <Text style={styles.quickReplyText}>{reply}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          
           <View style={styles.inputBox}>
             <TextInput
               style={styles.input}
@@ -125,6 +139,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   backBtn: { padding: 5 },
+  quickReplyContainer: {
+    marginBottom: 10,
+    marginHorizontal: -15,
+  },
+  quickReplyBtn: {
+    backgroundColor: '#e8f4f1',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#d0e8e3',
+  },
+  quickReplyText: {
+    color: '#43a08d',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   headerTitleBox: { flex: 1, alignItems: 'center' },
   headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#111' },
   onlineStatus: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
