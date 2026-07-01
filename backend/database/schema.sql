@@ -1,0 +1,94 @@
+-- StayLux Booking Hotel Database Schema
+-- Run: CREATE DATABASE booking_hotel_db; USE booking_hotel_db;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  phone VARCHAR(50) NOT NULL DEFAULT '',
+  password VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS hotels (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  location VARCHAR(255) NOT NULL,
+  description TEXT,
+  rating FLOAT NOT NULL,
+  image_url VARCHAR(500) NOT NULL,
+  category VARCHAR(100) DEFAULT 'Hotel'
+);
+
+CREATE TABLE IF NOT EXISTS rooms (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  hotel_id INT NOT NULL,
+  room_name VARCHAR(255) NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  capacity INT NOT NULL,
+  stock INT NOT NULL DEFAULT 5,
+  image_url VARCHAR(500),
+  FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  hotel_id INT NOT NULL,
+  room_id INT NOT NULL,
+  check_in_date DATE NOT NULL,
+  check_out_date DATE NOT NULL,
+  guest_name VARCHAR(255) NOT NULL DEFAULT '',
+  guest_email VARCHAR(255) NOT NULL DEFAULT '',
+  guest_phone VARCHAR(50) NOT NULL DEFAULT '',
+  room_count INT NOT NULL DEFAULT 1,
+  total_price DECIMAL(10,2) NOT NULL,
+  status ENUM('Pending', 'Paid', 'Cancelled') DEFAULT 'Pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
+  FOREIGN KEY (room_id) REFERENCES rooms(id)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  booking_id INT NOT NULL,
+  method VARCHAR(100) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  status VARCHAR(50) DEFAULT 'Paid',
+  payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS favorites (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  hotel_id INT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  hotel_id INT NOT NULL,
+  rating INT NOT NULL,
+  comment TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS facilities (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  icon VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS hotel_facilities (
+  hotel_id INT NOT NULL,
+  facility_id INT NOT NULL,
+  PRIMARY KEY (hotel_id, facility_id),
+  FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
+  FOREIGN KEY (facility_id) REFERENCES facilities(id) ON DELETE CASCADE
+);
