@@ -25,7 +25,7 @@ export default function LoginScreen() {
     try {
       const response = await api.login(email.trim(), password);
       if (response.success) {
-        globalStore.setUser(response.user.id, response.user.name, response.user.avatar_url);
+        globalStore.setUser(response.user.id, response.user.name, response.user.avatar_url, response.token);
         router.replace('/(tabs)');
       }
     } catch (error) {

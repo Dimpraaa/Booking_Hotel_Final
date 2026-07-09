@@ -30,6 +30,18 @@ const client = axios.create({
   },
 });
 
+import { globalStore } from "../store";
+
+client.interceptors.request.use(
+  (config) => {
+    if (globalStore.token) {
+      config.headers.Authorization = `Bearer ${globalStore.token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 export const formatCurrency = (value) => {
   if (value === undefined || value === null) return "";
   const num = Math.floor(Number(value));

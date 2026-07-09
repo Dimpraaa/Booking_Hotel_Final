@@ -7,10 +7,28 @@ const cron = require("node-cron");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const JWT_SECRET = process.env.JWT_SECRET || "staylux_super_secret_key_123";
+
+// Middleware to authenticate JWT
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: "Access denied. No token provided." });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Invalid token." });
+    req.user = user;
+    next();
+  });
+};
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -26,7 +44,15 @@ const storage = multer.diskStorage({
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+const fileFilter = (req, file, cb) => {
+  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Invalid file type. Only JPEG, PNG, and WEBP are allowed."), false);
+  }
+};
+const upload = multer({ storage: storage, fileFilter: fileFilter });
 
 app.use('/uploads', express.static(uploadDir));
 
@@ -226,6 +252,7 @@ function migrateSchema(done) {
     "ALTER TABLE bookings ADD COLUMN room_count INT NOT NULL DEFAULT 1",
     "ALTER TABLE bookings ADD COLUMN snap_token VARCHAR(255)",
     "ALTER TABLE bookings ADD COLUMN payment_url VARCHAR(500)",
+    "ALTER TABLE bookings MODIFY COLUMN status ENUM('Pending', 'Paid', 'Cancelled', 'Completed') DEFAULT 'Pending'",
   ];
 
   let index = 0;
@@ -469,44 +496,62 @@ function seedData() {
 }
 
 // ----------------- AUTH ENDPOINTS -----------------
-app.post("/api/register", (req, res) => {
+app.post("/api/register", async (req, res) => {
   const { name, email, phone, password } = req.body;
   if (!name || !email || !phone || !password) {
     return res.status(400).json({ error: "All fields are required" });
   }
-  const query =
-    "INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)";
-  db.query(query, [name, email, phone, password], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, message: "User registered successfully" });
-  });
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const query =
+      "INSERT INTO users (name, email, phone, password) VALUES (?, ?, ?, ?)";
+    db.query(query, [name, email, phone, hashedPassword], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, message: "User registered successfully" });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to hash password" });
+  }
 });
 
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
   const query =
-    "SELECT id, name, email, phone, avatar_url FROM users WHERE email = ? AND password = ?";
-  db.query(query, [email, password], (err, results) => {
+    "SELECT id, name, email, phone, avatar_url, password FROM users WHERE email = ?";
+  db.query(query, [email], async (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     if (results.length > 0) {
-      res.json({ success: true, user: results[0] });
+      const user = results[0];
+      const match = await bcrypt.compare(password, user.password);
+      if (match) {
+        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
+        delete user.password; // Do not send password back
+        res.json({ success: true, user, token });
+      } else {
+        res.status(401).json({ success: false, message: "Invalid credentials" });
+      }
     } else {
       res.status(401).json({ success: false, message: "Invalid credentials" });
     }
   });
 });
 
-app.post("/api/reset-password", (req, res) => {
+app.post("/api/reset-password", async (req, res) => {
   const { email, newPassword } = req.body;
-  const query = "UPDATE users SET password = ? WHERE email = ?";
-  db.query(query, [newPassword, email], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (result.affectedRows > 0) {
-      res.json({ success: true, message: "Password updated successfully" });
-    } else {
-      res.status(404).json({ success: false, message: "Email not found" });
-    }
-  });
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const query = "UPDATE users SET password = ? WHERE email = ?";
+    db.query(query, [hashedPassword, email], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (result.affectedRows > 0) {
+        res.json({ success: true, message: "Password updated successfully" });
+      } else {
+        res.status(404).json({ success: false, message: "Email not found" });
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to hash password" });
+  }
 });
 
 // ----------------- EXPLORE ENDPOINTS -----------------
@@ -642,33 +687,51 @@ app.get("/api/hotels/:id", (req, res) => {
   });
 });
 
-app.post("/api/hotels/:id/reviews", (req, res) => {
+app.post("/api/hotels/:id/reviews", authenticateToken, (req, res) => {
   const { id } = req.params;
   const { user_id, rating, comment } = req.body;
-  if (!user_id || !rating)
+  
+  if (req.user.id !== parseInt(user_id)) {
+    return res.status(403).json({ error: "Unauthorized access" });
+  }
+
+  if (!user_id || !rating) {
     return res.status(400).json({ error: "Missing required fields" });
+  }
 
-  const insertQuery =
-    "INSERT INTO reviews (user_id, hotel_id, rating, comment) VALUES (?, ?, ?, ?)";
-  db.query(insertQuery, [user_id, id, rating, comment], (err, result) => {
+  const checkBookingQuery = "SELECT id FROM bookings WHERE user_id = ? AND hotel_id = ? AND status IN ('Paid', 'Completed') LIMIT 1";
+  db.query(checkBookingQuery, [user_id, id], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
+    if (results.length === 0) {
+      return res.status(403).json({ error: "You must complete a stay at this hotel before leaving a review." });
+    }
 
-    const updateRatingQuery = `
-      UPDATE hotels 
-      SET rating = (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE hotel_id = ?) 
-      WHERE id = ?
-    `;
-    db.query(updateRatingQuery, [id, id], (err) => {
-      if (err) console.error("Error updating hotel rating average:", err);
-      res.json({ success: true, message: "Review added successfully" });
+    const insertQuery =
+      "INSERT INTO reviews (user_id, hotel_id, rating, comment) VALUES (?, ?, ?, ?)";
+    db.query(insertQuery, [user_id, id, rating, comment], (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+
+      const updateRatingQuery = `
+        UPDATE hotels 
+        SET rating = (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE hotel_id = ?) 
+        WHERE id = ?
+      `;
+      db.query(updateRatingQuery, [id, id], (err) => {
+        if (err) console.error("Error updating hotel rating average:", err);
+        res.json({ success: true, message: "Review added successfully" });
+      });
     });
   });
 });
 
-app.post("/api/hotels/:id/favorite", (req, res) => {
+app.post("/api/hotels/:id/favorite", authenticateToken, (req, res) => {
   const { id } = req.params;
   const { user_id } = req.body;
   if (!user_id) return res.status(400).json({ error: "Missing user_id" });
+  
+  if (req.user.id !== parseInt(user_id)) {
+    return res.status(403).json({ error: "Unauthorized access" });
+  }
 
   const checkQuery =
     "SELECT id FROM favorites WHERE user_id = ? AND hotel_id = ?";
@@ -701,8 +764,9 @@ app.post("/api/hotels/:id/favorite", (req, res) => {
   });
 });
 
-app.get("/api/users/:userId/favorites", (req, res) => {
+app.get("/api/users/:userId/favorites", authenticateToken, (req, res) => {
   const { userId } = req.params;
+  if (req.user.id !== parseInt(userId)) return res.status(403).json({ error: "Unauthorized access to another user's data." });
   const query = `
     SELECT h.*, COALESCE(MIN(r.price), 1000000) AS price_starts_at 
     FROM favorites f 
@@ -751,139 +815,158 @@ app.get("/api/hotels/:hotelId/rooms", (req, res) => {
 });
 
 // ----------------- BOOKING ENDPOINTS -----------------
-app.post("/api/bookings", (req, res) => {
+app.post("/api/bookings", authenticateToken, (req, res) => {
   const {
     user_id,
     hotel_id,
     room_id,
     check_in,
     check_out,
-    total_price,
     guest_name,
     guest_email,
     guest_phone,
     room_count,
   } = req.body;
 
-  if (
-    !user_id ||
-    !hotel_id ||
-    !room_id ||
-    !check_in ||
-    !check_out ||
-    !total_price
-  ) {
+  if (!user_id || !hotel_id || !room_id || !check_in || !check_out) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
+  const checkInDate = new Date(check_in);
+  const checkOutDate = new Date(check_out);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (checkInDate < today) {
+    return res.status(400).json({ error: "Check-in date cannot be in the past" });
+  }
+  if (checkOutDate <= checkInDate) {
+    return res.status(400).json({ error: "Check-out date must be after check-in date" });
+  }
+
   const requestedRooms = room_count || 1;
+  const days = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
 
-  // Check if there is enough stock for the requested dates
-  const checkStockQuery = `
-    SELECT 
-      r.stock,
-      COALESCE(
-        (SELECT SUM(b.room_count) 
-         FROM bookings b 
-         WHERE b.room_id = r.id 
-         AND b.status != 'Cancelled' 
-         AND (b.check_in_date < ? AND b.check_out_date > ?)
-        ), 0) AS booked_rooms
-    FROM rooms r
-    WHERE r.id = ?
-  `;
-
-  db.query(checkStockQuery, [check_out, check_in, room_id], (err, results) => {
+  db.beginTransaction((err) => {
     if (err) return res.status(500).json({ error: err.message });
 
-    if (results.length === 0) {
-      return res.status(404).json({ success: false, error: "Room not found." });
-    }
+    const checkStockQuery = `
+      SELECT 
+        r.price,
+        r.stock,
+        COALESCE(
+          (SELECT SUM(b.room_count) 
+           FROM bookings b 
+           WHERE b.room_id = r.id 
+           AND b.status != 'Cancelled' 
+           AND (b.check_in_date < ? AND b.check_out_date > ?)
+          ), 0) AS booked_rooms
+      FROM rooms r
+      WHERE r.id = ? FOR UPDATE
+    `;
 
-    const { stock, booked_rooms } = results[0];
-    const available_rooms = stock - booked_rooms;
+    db.query(checkStockQuery, [check_out, check_in, room_id], (err, results) => {
+      if (err) {
+        return db.rollback(() => res.status(500).json({ error: err.message }));
+      }
+      if (results.length === 0) {
+        return db.rollback(() => res.status(404).json({ success: false, error: "Room not found." }));
+      }
 
-    if (available_rooms < requestedRooms) {
-      return res.status(409).json({
-        success: false,
-        error: `Not enough rooms available. Only ${available_rooms} room(s) left for selected dates.`,
-      });
-    }
+      const { price, stock, booked_rooms } = results[0];
+      const available_rooms = stock - booked_rooms;
 
-    const insertQuery =
-      'INSERT INTO bookings (user_id, hotel_id, room_id, check_in_date, check_out_date, total_price, status, guest_name, guest_email, guest_phone, room_count) VALUES (?, ?, ?, ?, ?, ?, "Pending", ?, ?, ?, ?)';
-    db.query(
-      insertQuery,
-      [
-        user_id,
-        hotel_id,
-        room_id,
-        check_in,
-        check_out,
-        total_price,
-        guest_name || "",
-        guest_email || "",
-        guest_phone || "",
-        requestedRooms,
-      ],
-      (insertErr, result) => {
-        if (insertErr)
-          return res.status(500).json({ error: insertErr.message });
+      if (available_rooms < requestedRooms) {
+        return db.rollback(() => res.status(409).json({
+          success: false,
+          error: `Not enough rooms available. Only ${available_rooms} room(s) left for selected dates.`,
+        }));
+      }
 
-        const bookingId = result.insertId;
+      const computed_price = price * requestedRooms * days;
 
-        // Generate Midtrans Snap Token
-        const order_id = `BOOK-${bookingId}-${Date.now()}`;
-        let parameter = {
-          transaction_details: {
-            order_id: order_id,
-            gross_amount: Math.round(total_price),
-          },
-          credit_card: {
-            secure: true,
-          },
-          customer_details: {
-            first_name: guest_name || "Guest",
-            email: guest_email || "guest@example.com",
-            phone: guest_phone || "",
-          },
-        };
+      const insertQuery =
+        'INSERT INTO bookings (user_id, hotel_id, room_id, check_in_date, check_out_date, total_price, status, guest_name, guest_email, guest_phone, room_count) VALUES (?, ?, ?, ?, ?, ?, "Pending", ?, ?, ?, ?)';
+      
+      db.query(
+        insertQuery,
+        [
+          user_id,
+          hotel_id,
+          room_id,
+          check_in,
+          check_out,
+          computed_price,
+          guest_name || "",
+          guest_email || "",
+          guest_phone || "",
+          requestedRooms,
+        ],
+        (insertErr, result) => {
+          if (insertErr) {
+            return db.rollback(() => res.status(500).json({ error: insertErr.message }));
+          }
 
-        snap
-          .createTransaction(parameter)
-          .then((transaction) => {
+          const bookingId = result.insertId;
+          const order_id = `BOOK-${bookingId}-${Date.now()}`;
+          let parameter = {
+            transaction_details: {
+              order_id: order_id,
+              gross_amount: Math.round(computed_price),
+            },
+            credit_card: { secure: true },
+            customer_details: {
+              first_name: guest_name || "Guest",
+              email: guest_email || "guest@example.com",
+              phone: guest_phone || "",
+            },
+          };
+
+          snap.createTransaction(parameter).then((transaction) => {
             const snapToken = transaction.token;
             const redirectUrl = transaction.redirect_url;
             
-            // Save token and URL to db
-            db.query("UPDATE bookings SET snap_token = ?, payment_url = ?, order_id = ? WHERE id = ?", [snapToken, redirectUrl, order_id, bookingId], () => {
-              res.json({
-                success: true,
-                message: "Booking created successfully",
-                booking_id: bookingId,
-                snap_token: snapToken,
-                redirect_url: redirectUrl,
-                order_id: order_id,
+            db.query("UPDATE bookings SET snap_token = ?, payment_url = ?, order_id = ? WHERE id = ?", [snapToken, redirectUrl, order_id, bookingId], (updateErr) => {
+              if (updateErr) {
+                return db.rollback(() => res.status(500).json({ error: updateErr.message }));
+              }
+              db.commit((commitErr) => {
+                if (commitErr) {
+                  return db.rollback(() => res.status(500).json({ error: commitErr.message }));
+                }
+                res.json({
+                  success: true,
+                  message: "Booking created successfully",
+                  booking_id: bookingId,
+                  snap_token: snapToken,
+                  redirect_url: redirectUrl,
+                  order_id: order_id,
+                });
               });
             });
-          })
-          .catch((e) => {
+          }).catch((e) => {
             console.error("Midtrans Error:", e.message);
-            // Fallback if Midtrans setup is incomplete
-            res.json({
-              success: true,
-              message: "Booking created (Midtrans simulated)",
-              booking_id: bookingId,
-              snap_token: "dummy-token",
+            db.commit((commitErr) => {
+              if (commitErr) {
+                return db.rollback(() => res.status(500).json({ error: commitErr.message }));
+              }
+              res.json({
+                success: true,
+                message: "Booking created (Midtrans simulated)",
+                booking_id: bookingId,
+                snap_token: "dummy-token",
+              });
             });
           });
-      },
-    );
+        }
+      );
+    });
   });
 });
 
-app.get("/api/users/:userId/bookings", (req, res) => {
+app.get("/api/users/:userId/bookings", authenticateToken, (req, res) => {
   const { userId } = req.params;
+  if (req.user.id !== parseInt(userId)) return res.status(403).json({ error: "Unauthorized access to another user's data." });
   const query = `
     SELECT b.*, r.room_name, h.name as hotel_name, h.image_url, (SELECT method FROM payments p WHERE p.booking_id = b.id ORDER BY p.payment_date DESC LIMIT 1) as payment_method 
     FROM bookings b
@@ -898,7 +981,7 @@ app.get("/api/users/:userId/bookings", (req, res) => {
   });
 });
 
-app.put("/api/bookings/:id/pay", async (req, res) => {
+app.put("/api/bookings/:id/pay", authenticateToken, async (req, res) => {
   const { id } = req.params;
   let { order_id } = req.body;
   
@@ -970,11 +1053,13 @@ app.put("/api/bookings/:id/pay", async (req, res) => {
   });
 });
 
-app.delete("/api/bookings/:id", (req, res) => {
+app.delete("/api/bookings/:id", authenticateToken, (req, res) => {
   const { id } = req.params;
-  const query = 'UPDATE bookings SET status = "Cancelled" WHERE id = ?';
-  db.query(query, [id], (err, result) => {
+  const userId = req.user.id;
+  const query = 'UPDATE bookings SET status = "Cancelled" WHERE id = ? AND user_id = ?';
+  db.query(query, [id, userId], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Booking not found or unauthorized" });
     res.json({ success: true, message: "Booking cancelled successfully" });
   });
 });
@@ -983,10 +1068,23 @@ app.delete("/api/bookings/:id", (req, res) => {
 app.post("/api/payments/webhook", (req, res) => {
   const notificationJson = req.body;
 
+  // Webhook Signature Validation
+  const signatureKey = notificationJson.signature_key;
+  const orderId = notificationJson.order_id;
+  const statusCode = notificationJson.status_code;
+  const grossAmount = notificationJson.gross_amount;
+  const serverKey = snap.apiConfig.serverKey;
+
+  const expectedSignature = crypto.createHash('sha512').update(orderId + statusCode + grossAmount + serverKey).digest('hex');
+
+  if (signatureKey !== expectedSignature) {
+    console.error("Invalid Webhook Signature.");
+    return res.status(403).json({ error: "Invalid signature" });
+  }
+
   snap.transaction
     .notification(notificationJson)
     .then((statusResponse) => {
-      let orderId = statusResponse.order_id;
       let transactionStatus = statusResponse.transaction_status;
       let fraudStatus = statusResponse.fraud_status;
 
@@ -1079,8 +1177,9 @@ app.post("/api/payments", (req, res) => {
 });
 
 // ----------------- PROFILE ENDPOINTS -----------------
-app.get("/api/users/:id", (req, res) => {
+app.get("/api/users/:id", authenticateToken, (req, res) => {
   const { id } = req.params;
+  if (req.user.id !== parseInt(id)) return res.status(403).json({ error: "Unauthorized access to another user's data." });
   db.query(
     "SELECT id, name, email, phone, avatar_url, gender, dob, address, created_at FROM users WHERE id = ?",
     [id],
@@ -1094,8 +1193,9 @@ app.get("/api/users/:id", (req, res) => {
 });
 
 // API Update User Profile (Full)
-app.put("/api/users/:id", (req, res) => {
+app.put("/api/users/:id", authenticateToken, (req, res) => {
   const userId = req.params.id;
+  if (req.user.id !== parseInt(userId)) return res.status(403).json({ error: "Unauthorized access to another user's data." });
   const { name, email, phone, avatar_url, gender, dob, address } = req.body;
   if (!name || !email) {
     return res.status(400).json({ error: "Name and email are required" });
@@ -1123,7 +1223,16 @@ app.put("/api/users/:id", (req, res) => {
 });
 
 // API Upload Avatar
-app.post("/api/upload", upload.single("avatar"), (req, res) => {
+app.post("/api/upload", authenticateToken, (req, res, next) => {
+  upload.single("avatar")(req, res, function (err) {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: err.message });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
@@ -1145,6 +1254,23 @@ cron.schedule("*/5 * * * *", () => {
     if (err) console.error("Cron job error:", err);
     else if (result.affectedRows > 0) {
       console.log(`Cancelled ${result.affectedRows} expired booking(s).`);
+    }
+  });
+});
+
+// Auto-complete Paid bookings after check-out date. Runs every hour.
+cron.schedule("0 * * * *", () => {
+  console.log("Running background job to complete finished bookings...");
+  const completeQuery = `
+    UPDATE bookings 
+    SET status = 'Completed' 
+    WHERE status = 'Paid' 
+    AND check_out_date < CURDATE()
+  `;
+  db.query(completeQuery, (err, result) => {
+    if (err) console.error("Cron job error (Completed):", err);
+    else if (result.affectedRows > 0) {
+      console.log(`Completed ${result.affectedRows} finished booking(s).`);
     }
   });
 });

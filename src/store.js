@@ -6,14 +6,16 @@ export const globalStore = {
   userName: 'Guest',
   userId: null,
   avatarUrl: null,
+  token: null,
   isLoggedIn: false,
 
-  setUser: (id, name, avatarUrl = null) => {
+  setUser: (id, name, avatarUrl = null, token = null) => {
     globalStore.userId = id;
     globalStore.userName = name;
     globalStore.avatarUrl = avatarUrl;
+    if (token) globalStore.token = token;
     globalStore.isLoggedIn = true;
-    AsyncStorage.setItem(AUTH_KEY, JSON.stringify({ id, name, avatarUrl }));
+    AsyncStorage.setItem(AUTH_KEY, JSON.stringify({ id, name, avatarUrl, token: globalStore.token }));
   },
 
   setUsername: (name) => {
@@ -24,10 +26,11 @@ export const globalStore = {
     try {
       const raw = await AsyncStorage.getItem(AUTH_KEY);
       if (raw) {
-        const { id, name, avatarUrl } = JSON.parse(raw);
+        const { id, name, avatarUrl, token } = JSON.parse(raw);
         globalStore.userId = id;
         globalStore.userName = name;
         globalStore.avatarUrl = avatarUrl;
+        globalStore.token = token;
         globalStore.isLoggedIn = true;
         return true;
       }
@@ -42,6 +45,7 @@ export const globalStore = {
     globalStore.userId = null;
     globalStore.userName = 'Guest';
     globalStore.avatarUrl = null;
+    globalStore.token = null;
     globalStore.isLoggedIn = false;
     await AsyncStorage.removeItem(AUTH_KEY);
   },
