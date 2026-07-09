@@ -5,13 +5,15 @@ const AUTH_KEY = '@staylux_auth';
 export const globalStore = {
   userName: 'Guest',
   userId: null,
+  avatarUrl: null,
   isLoggedIn: false,
 
-  setUser: (id, name) => {
+  setUser: (id, name, avatarUrl = null) => {
     globalStore.userId = id;
     globalStore.userName = name;
+    globalStore.avatarUrl = avatarUrl;
     globalStore.isLoggedIn = true;
-    AsyncStorage.setItem(AUTH_KEY, JSON.stringify({ id, name }));
+    AsyncStorage.setItem(AUTH_KEY, JSON.stringify({ id, name, avatarUrl }));
   },
 
   setUsername: (name) => {
@@ -22,9 +24,10 @@ export const globalStore = {
     try {
       const raw = await AsyncStorage.getItem(AUTH_KEY);
       if (raw) {
-        const { id, name } = JSON.parse(raw);
+        const { id, name, avatarUrl } = JSON.parse(raw);
         globalStore.userId = id;
         globalStore.userName = name;
+        globalStore.avatarUrl = avatarUrl;
         globalStore.isLoggedIn = true;
         return true;
       }
@@ -38,6 +41,7 @@ export const globalStore = {
   logout: async () => {
     globalStore.userId = null;
     globalStore.userName = 'Guest';
+    globalStore.avatarUrl = null;
     globalStore.isLoggedIn = false;
     await AsyncStorage.removeItem(AUTH_KEY);
   },

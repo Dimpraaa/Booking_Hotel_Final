@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { globalStore } from '../../src/store';
 import { api } from '../../src/api/client';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<any>(null);
@@ -20,6 +21,38 @@ export default function ProfileScreen() {
   const [editDob, setEditDob] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handlePickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setUploadingImage(true);
+      try {
+        const localUri = result.assets[0].uri;
+        const filename = localUri.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename || '');
+        const type = match ? `image/${match[1]}` : `image`;
+
+        const formData = new FormData();
+        formData.append('avatar', { uri: localUri, name: filename, type } as any);
+
+        const uploadRes = await api.uploadAvatar(formData);
+        if (uploadRes.success) {
+          setEditAvatar(uploadRes.fullUrl);
+        }
+      } catch (error: any) {
+        Alert.alert('Upload Error', error.message || 'Failed to upload image');
+      } finally {
+        setUploadingImage(false);
+      }
+    }
+  };
 
   // Favorites States
   const [favoritesList, setFavoritesList] = useState<any[]>([]);
@@ -47,8 +80,8 @@ export default function ProfileScreen() {
     try {
       const data = await api.getUserProfile(globalStore.userId);
       setUser(data);
-      // Sync names with global store
-      globalStore.setUser(data.id, data.name);
+      // Sync names and avatar with global store
+      globalStore.setUser(data.id, data.name, data.avatar_url);
     } catch (error) {
       console.error(error);
     } finally {
@@ -107,7 +140,7 @@ export default function ProfileScreen() {
           dob: editDob,
           address: editAddress
         });
-        globalStore.setUser(globalStore.userId, editName);
+        globalStore.setUser(globalStore.userId, editName, editAvatar);
         setShowEditModal(false);
       }
     } catch (error: any) {
@@ -295,15 +328,20 @@ export default function ProfileScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.label}>Avatar Image URL (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="https://example.com/photo.jpg"
-                  placeholderTextColor="#aaa"
-                  value={editAvatar}
-                  onChangeText={setEditAvatar}
-                  autoCapitalize="none"
-                />
+                <Text style={styles.label}>Profile Picture</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Image
+                    source={{ uri: editAvatar || 'https://i.pravatar.cc/150?img=5' }}
+                    style={{ width: 60, height: 60, borderRadius: 30, marginRight: 15 }}
+                  />
+                  <TouchableOpacity 
+                    style={[styles.saveBtn, { width: 'auto', paddingHorizontal: 20, height: 40 }]} 
+                    onPress={handlePickImage}
+                    disabled={uploadingImage}
+                  >
+                    {uploadingImage ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Choose Photo</Text>}
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={styles.formRow}>

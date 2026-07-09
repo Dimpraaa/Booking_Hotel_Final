@@ -4,10 +4,31 @@ const mysql = require("mysql2");
 const cors = require("cors");
 const midtransClient = require("midtrans-client");
 const cron = require("node-cron");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
+
+app.use('/uploads', express.static(uploadDir));
 
 // Konfigurasi Midtrans (Gunakan Server Key Sandbox Anda sendiri nantinya)
 const snap = new midtransClient.Snap({
@@ -464,7 +485,7 @@ app.post("/api/register", (req, res) => {
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
   const query =
-    "SELECT id, name, email, phone FROM users WHERE email = ? AND password = ?";
+    "SELECT id, name, email, phone, avatar_url FROM users WHERE email = ? AND password = ?";
   db.query(query, [email, password], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     if (results.length > 0) {
@@ -835,7 +856,7 @@ app.post("/api/bookings", (req, res) => {
             const redirectUrl = transaction.redirect_url;
             
             // Save token and URL to db
-            db.query("UPDATE bookings SET snap_token = ?, payment_url = ? WHERE id = ?", [snapToken, redirectUrl, bookingId], () => {
+            db.query("UPDATE bookings SET snap_token = ?, payment_url = ?, order_id = ? WHERE id = ?", [snapToken, redirectUrl, order_id, bookingId], () => {
               res.json({
                 success: true,
                 message: "Booking created successfully",
@@ -864,7 +885,7 @@ app.post("/api/bookings", (req, res) => {
 app.get("/api/users/:userId/bookings", (req, res) => {
   const { userId } = req.params;
   const query = `
-    SELECT b.*, r.room_name, h.name as hotel_name, h.image_url 
+    SELECT b.*, r.room_name, h.name as hotel_name, h.image_url, (SELECT method FROM payments p WHERE p.booking_id = b.id ORDER BY p.payment_date DESC LIMIT 1) as payment_method 
     FROM bookings b
     JOIN rooms r ON b.room_id = r.id
     JOIN hotels h ON b.hotel_id = h.id
@@ -879,15 +900,27 @@ app.get("/api/users/:userId/bookings", (req, res) => {
 
 app.put("/api/bookings/:id/pay", async (req, res) => {
   const { id } = req.params;
-  const { order_id } = req.body;
+  let { order_id } = req.body;
   
   let method = "Midtrans";
   let midtransSuccess = false;
+  let amount = 0;
+  
+  // Fetch order_id from database if not provided
+  if (!order_id) {
+    order_id = await new Promise((resolve) => {
+      db.query("SELECT order_id FROM bookings WHERE id = ?", [id], (err, results) => {
+        if (!err && results.length > 0) resolve(results[0].order_id);
+        else resolve(null);
+      });
+    });
+  }
   
   if (order_id) {
     try {
       const statusResponse = await snap.transaction.status(order_id);
       method = statusResponse.payment_type;
+      amount = statusResponse.gross_amount || 0;
       if (method === "bank_transfer" && statusResponse.va_numbers && statusResponse.va_numbers.length > 0) {
         method = statusResponse.va_numbers[0].bank + "_va";
       }
@@ -901,7 +934,7 @@ app.put("/api/bookings/:id/pay", async (req, res) => {
   if (!midtransSuccess) {
     try {
       const dbMethod = await new Promise((resolve) => {
-        db.query("SELECT method FROM payments WHERE booking_id = ? ORDER BY created_at DESC LIMIT 1", [id], (err, results) => {
+        db.query("SELECT method FROM payments WHERE booking_id = ? ORDER BY payment_date DESC LIMIT 1", [id], (err, results) => {
           if (!err && results.length > 0) {
             resolve(results[0].method);
           } else {
@@ -920,6 +953,15 @@ app.put("/api/bookings/:id/pay", async (req, res) => {
   const query = 'UPDATE bookings SET status = "Paid" WHERE id = ?';
   db.query(query, [id], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
+    
+    if (midtransSuccess) {
+      db.query("SELECT id FROM payments WHERE booking_id = ?", [id], (err, results) => {
+        if (!err && results.length === 0) {
+          db.query("INSERT INTO payments (booking_id, method, amount, status) VALUES (?, ?, ?, 'Paid')", [id, method, amount]);
+        }
+      });
+    }
+
     res.json({
       success: true,
       message: "Payment successful, booking confirmed!",
@@ -980,14 +1022,24 @@ app.post("/api/payments/webhook", (req, res) => {
           else {
             // Log payment if Paid
             if (newBookingStatus === "Paid") {
-              const amount = statusResponse.gross_amount;
-              const method = statusResponse.payment_type;
+              const amount = statusResponse.gross_amount || 0;
+              let method = statusResponse.payment_type;
+              if (method === "bank_transfer" && statusResponse.va_numbers && statusResponse.va_numbers.length > 0) {
+                method = statusResponse.va_numbers[0].bank + "_va";
+              }
               db.query(
-                "INSERT INTO payments (booking_id, method, amount, status) VALUES (?, ?, ?, 'Paid')",
-                [bookingId, method, amount],
-                (err) => {
-                  if (err) console.error("Error logging payment:", err);
-                },
+                "SELECT id FROM payments WHERE booking_id = ?", [bookingId],
+                (err, results) => {
+                  if (!err && results.length === 0) {
+                    db.query(
+                      "INSERT INTO payments (booking_id, method, amount, status) VALUES (?, ?, ?, 'Paid')",
+                      [bookingId, method, amount],
+                      (err) => {
+                        if (err) console.error("Error logging payment:", err);
+                      }
+                    );
+                  }
+                }
               );
             }
           }
@@ -1068,6 +1120,15 @@ app.put("/api/users/:id", (req, res) => {
       res.json({ success: true, message: "Profile updated successfully" });
     },
   );
+});
+
+// API Upload Avatar
+app.post("/api/upload", upload.single("avatar"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+  const avatarUrl = `/uploads/${req.file.filename}`;
+  res.json({ success: true, url: avatarUrl });
 });
 
 // ----------------- BACKGROUND JOBS -----------------

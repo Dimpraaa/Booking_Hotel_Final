@@ -245,6 +245,18 @@ export const api = {
       throw new Error(message);
     }
   },
+
+  uploadAvatar: async (formData) => {
+    try {
+      const response = await client.post('/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return { ...response.data, fullUrl: BASE_URL.replace('/api', '') + response.data.url };
+    } catch (error) {
+      const message = error.response?.data?.error || error.message;
+      throw new Error(message);
+    }
+  },
 };
 
 export default client;

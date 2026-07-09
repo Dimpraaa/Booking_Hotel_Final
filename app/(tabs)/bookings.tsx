@@ -100,7 +100,7 @@ export default function BookingsScreen() {
         checkIn: item.check_in_date,
         checkOut: item.check_out_date,
         totalPrice: String(item.total_price),
-        paymentMethod: item.status === 'Paid' ? 'Paid' : 'Pending',
+        paymentMethod: item.status === 'Paid' ? formatPaymentMethod(item.payment_method || 'Midtrans') : 'Pending',
       },
     });
   };

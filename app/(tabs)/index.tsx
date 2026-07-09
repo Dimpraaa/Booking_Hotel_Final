@@ -203,7 +203,7 @@ export default function SearchEngineScreen() {
               <Ionicons name="notifications-outline" size={20} color="#43a08d" />
             </TouchableOpacity>
             <Image 
-              source={{ uri: 'https://i.pravatar.cc/100?img=5' }} 
+              source={{ uri: globalStore.avatarUrl || 'https://i.pravatar.cc/100?img=5' }} 
               style={styles.avatar}
             />
           </View>
@@ -279,7 +279,7 @@ export default function SearchEngineScreen() {
 
         {/* Recommended Hotels */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recommended Hotels</Text>
+          <Text style={styles.sectionTitle}>Recommended for you</Text>
           <TouchableOpacity onPress={handleSearch}>
             <Text style={styles.seeAll}>See all</Text>
           </TouchableOpacity>
@@ -287,11 +287,12 @@ export default function SearchEngineScreen() {
         {loadingHotels ? (
           <LoadingState message="Loading hotels..." />
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carousel} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 15, paddingTop: 5 }}>
+          <View style={{ paddingHorizontal: 20, paddingBottom: 15, paddingTop: 5 }}>
             {recommendedHotels.map((hotel) => (
               <HotelCard
                 key={hotel.id}
                 hotel={hotel}
+                variant="horizontal"
                 onPress={() => router.push({
                   pathname: '/detail',
                   params: {
@@ -303,76 +304,8 @@ export default function SearchEngineScreen() {
                 })}
               />
             ))}
-          </ScrollView>
+          </View>
         )}
-
-        {/* Special Promos */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Special Promos</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>See all</Text></TouchableOpacity>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carousel} contentContainerStyle={{ paddingHorizontal: 20 }}>
-          <View style={styles.promoCard}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&q=60' }} style={styles.promoImg} />
-            <View style={styles.promoOverlay}>
-              <View style={styles.badgeWrapper}>
-                <Text style={styles.badgeText}>Limited</Text>
-              </View>
-              <View style={styles.promoTexts}>
-                <Text style={styles.promoSub}>SUMMER ESCAPE</Text>
-                <Text style={styles.promoMain}>25% OFF</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.promoCard}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1503394474640-c3d31405a396?w=500&q=60' }} style={styles.promoImg} />
-            <View style={styles.promoOverlay}>
-              <View style={styles.promoTexts}>
-                <Text style={styles.promoSub}>BUSINESS CLASS</Text>
-                <Text style={styles.promoMain}>15% OFF</Text>
-              </View>
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Popular Destinations */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Popular Destinations</Text>
-          <TouchableOpacity><Text style={styles.seeAll}>Explore</Text></TouchableOpacity>
-        </View>
-
-        <View style={styles.grid}>
-          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Bali')}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=500&q=60' }} style={styles.gridImg} />
-            <View style={styles.gridOverlay}>
-              <Text style={styles.gridTitle}>Bali</Text>
-              <Text style={styles.gridSub}>Indonesia</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Tokyo')}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=500&q=60' }} style={styles.gridImg} />
-            <View style={styles.gridOverlay}>
-              <Text style={styles.gridTitle}>Tokyo</Text>
-              <Text style={styles.gridSub}>Japan</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Paris')}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1502602898657-3e90760020c6?w=500&q=60' }} style={styles.gridImg} />
-            <View style={styles.gridOverlay}>
-              <Text style={styles.gridTitle}>Paris</Text>
-              <Text style={styles.gridSub}>France</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.gridCard} onPress={() => handleDestinationPress('Dubai')}>
-            <Image source={{ uri: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=500&q=60' }} style={styles.gridImg} />
-            <View style={styles.gridOverlay}>
-              <Text style={styles.gridTitle}>Dubai</Text>
-              <Text style={styles.gridSub}>UAE</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
 
         <View style={{height: 100}} />
       </ScrollView>
@@ -551,84 +484,7 @@ const styles = StyleSheet.create({
   carousel: {
     marginBottom: 10,
   },
-  promoCard: {
-    width: 260,
-    height: 130,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginRight: 15,
-    backgroundColor: '#333',
-  },
-  promoImg: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.6,
-  },
-  promoOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    padding: 15,
-    justifyContent: 'space-between',
-  },
-  badgeWrapper: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#ff4d4f',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  promoTexts: {
-    marginTop: 'auto',
-  },
-  promoSub: {
-    color: '#fff',
-    fontSize: 11,
-    letterSpacing: 1,
-    fontWeight: 'bold',
-  },
-  promoMain: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-  },
-  gridCard: {
-    width: '48%',
-    height: 160,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 15,
-    backgroundColor: '#333',
-  },
-  gridImg: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.7,
-  },
-  gridOverlay: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    padding: 15,
-  },
-  gridTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  gridSub: {
-    color: '#ddd',
-    fontSize: 12,
-  },
+
   headerSubtitle: {
     color: '#888',
     fontSize: 14,
