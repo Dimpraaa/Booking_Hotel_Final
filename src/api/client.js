@@ -9,16 +9,16 @@ const getBaseUrl = () => {
     return `http://${ip}:3000/api`;
   }
   // Fallback ke IP aktif saat ini jika tidak menggunakan Metro bundler/debugger
-  return "http://192.168.0.9:3000/api";
+  return "http://192.168.100.7:3000/api";
 };
 
 const BASE_URL = getBaseUrl();
 
-import { io } from 'socket.io-client';
+import { io } from "socket.io-client";
 
 // Inisialisasi Socket.IO
 // Kita butuh base URL tanpa `/api` untuk socket server
-const SOCKET_URL = BASE_URL.replace('/api', '');
+const SOCKET_URL = BASE_URL.replace("/api", "");
 export const socket = io(SOCKET_URL, {
   autoConnect: false, // Hubungkan manual nanti saat user masuk
 });
@@ -39,7 +39,7 @@ client.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 export const formatCurrency = (value) => {
@@ -250,7 +250,9 @@ export const api = {
 
   payBooking: async (id, orderId) => {
     try {
-      const response = await client.put(`/bookings/${id}/pay`, { order_id: orderId });
+      const response = await client.put(`/bookings/${id}/pay`, {
+        order_id: orderId,
+      });
       return response.data;
     } catch (error) {
       const message = error.response?.data?.error || error.message;
@@ -260,10 +262,13 @@ export const api = {
 
   uploadAvatar: async (formData) => {
     try {
-      const response = await client.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const response = await client.post("/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      return { ...response.data, fullUrl: BASE_URL.replace('/api', '') + response.data.url };
+      return {
+        ...response.data,
+        fullUrl: BASE_URL.replace("/api", "") + response.data.url,
+      };
     } catch (error) {
       const message = error.response?.data?.error || error.message;
       throw new Error(message);

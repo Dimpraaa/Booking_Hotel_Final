@@ -883,7 +883,10 @@ app.post("/api/bookings", authenticateToken, (req, res) => {
         }));
       }
 
-      const computed_price = price * requestedRooms * days;
+      const roomTotal = price * requestedRooms * days;
+      const resortFee = 50000 * requestedRooms;
+      const taxes = (roomTotal + resortFee) * 0.11;
+      const computed_price = roomTotal + resortFee + taxes;
 
       const insertQuery =
         'INSERT INTO bookings (user_id, hotel_id, room_id, check_in_date, check_out_date, total_price, status, guest_name, guest_email, guest_phone, room_count) VALUES (?, ?, ?, ?, ?, ?, "Pending", ?, ?, ?, ?)';
